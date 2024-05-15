@@ -1,0 +1,61 @@
+คำสั่งติดตั้ง Fail2Ban โดยใช้ code จาก GitHub
+ $ sudo apt install -y python3-setuptools
+ $ git clone https://github.com/fail2ban/fail2ban.git
+ $ cd fail2ban
+ $ sudo python3 setup.py install
+ $ sudo cp files/debian-initd /etc/init.d/fail2ban
+ $ sudo update-rc.d fail2ban defaults
+ $ sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
+ $ sudo nano /etc/fail2ban/jail.local
+     [DEFAULT]
+     backend = systemd
+     banaction = ufw
+
+     [sshd]
+     enabled = true
+
+ $ sudo systemctl start fail2ban
+
+แก้ไขให้ Fail2Ban ใช้ ufw แทน iptables
+ $ sudo nano /etc/fail2ban/jail.local
+     banaction = ufw
+ $ sudo ufw enable
+ $ sudo ufw allow ssh
+ $ sudo systemctl start fail2ban
+
+การติดตั้ง Sendmail ให้ใช้ SMTP ของ Gmail
+  $ sudo apt --purge autoremove postfix
+  $ sudo apt update
+  $ sudo apt install -y sendmail mailutils
+  $ sudo mkdir -m 700 /etc/mail/authinfo
+  $ nano gmail-smtp-auth
+     AuthInfo: "U:root" "I:USER@gmail.com" "P:16-digit-app-password"
+  $ chmod 600 gmail-smtp-auth
+  $ sudo makemap hash /etc/mail/authinfo/gmail-smtp-auth < gmail-smtp-auth
+  $ sudo nano /etc/mail/sendmail.mc
+     dnl #
+     dnl # GMail settings:
+     define(`SMART_HOST',`[smtp.gmail.com]')dnl
+     define(`RELAY_MAILER_ARGS', `TCP $h 587')dnl
+     define(`ESMTP_MAILER_ARGS', `TCP $h 587')dnl
+     define(`confAUTH_OPTIONS', `A p')dnl
+     TRUST_AUTH_MECH(`EXTERNAL DIGEST-MD5 CRAM-MD5 LOGIN PLAIN')dnl
+     define(`confAUTH_MECHANISMS', `EXTERNAL GSSAPI DIGEST-MD5 CRAM-MD5 LOGIN PLAIN')dnl
+     FEATURE(`authinfo',`hash -o /etc/mail/authinfo/gmail-smtp-auth.db')dnl
+     dnl #
+  $ sudo make -C /etc/mail
+  $ sudo /etc/init.d/sendmail reload 
+  $ sudo systemctl enable sendmail
+  $ echo "Hello, I am from $(hostname)" | \
+    mail -s "Testing Gmail Setup on Ubuntu Server" \
+    admin@xyz.com
+
+แก้ไขให้ Fail2Ban ส่ง email notification
+ $ sudo nano /etc/fail2ban/jail.local     
+     destmail = admin@xyz.com
+     sender = USERXXX@gmail.com
+     action = %(action_mwl)s
+ $ sudo nano /etc/fail2ban/action.d/sendmail-whois-lines.conf	
+     timeout = 120
+ $ sudo apt install -y whois
+ $ sudo systemctl start fail2ban
